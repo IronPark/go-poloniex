@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"github.com/ironpark/coinex/trader"
+	"strconv"
 )
 
 const (
@@ -109,6 +111,59 @@ func (b *Poloniex) ChartData(currencyPair string, period int, start, end time.Ti
 
 	if err = json.Unmarshal(r, &candles); err != nil {
 		return
+	}
+
+	return
+}
+
+func (b *Poloniex) MarketHistory(currencyPair string, start, end time.Time) (trades []Trade, err error) {
+	r, err := b.client.do("GET", fmt.Sprintf(
+		"/public?command=returnTradeHistory&currencyPair=%s&start=%d&end=%d",
+		strings.ToUpper(currencyPair),
+		start.Unix(),
+		end.Unix(),
+	), "", false)
+	if err != nil {
+		return
+	}
+
+	if err = json.Unmarshal(r, &trades); err != nil {
+		return
+	}
+
+	return
+}
+//returnTradeHistory
+
+//"available":"5.015","onOrders":"1.0025","btcValue":"0.078"
+func (b *Poloniex) GetBalance() (balance []Balance, err error) {
+	r, err := b.client.do("POST", "https://poloniex.com/tradingApi?command=returnCompleteBalances","", false)
+	balance = []Balance{}
+	if err != nil {
+		return
+	}
+	response := make(map[string]interface{})
+	if err = json.Unmarshal(r, &response); err != nil {
+		return
+	}
+
+	if response["error"] != nil {
+		err = errors.New(response["error"].(string))
+		return
+	}
+
+	for k, v := range response {
+		values := v.(map[string]interface{})
+		available, _ := strconv.ParseFloat(values["available"].(string), 64)
+		onOders, _ := strconv.ParseFloat(values["onOrders"].(string), 64)
+		btc, _ := strconv.ParseFloat(values["btcValue"].(string), 64)
+		balance = append(balance,Balance{
+			Currency:  k,
+			Balance:   onOders+available,
+			Available: available,
+			Pending:   onOders,
+			Value:     btc,
+		})
 	}
 
 	return
